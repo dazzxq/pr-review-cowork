@@ -1,0 +1,5 @@
+# Python deps cho Cowork-Lite PR Review
+# Cài đặt: pip install -r requirements.txt
+# Hoặc chạy ./setup.sh để tự động tạo venv + install
+
+markitdown[all]>=0.1.0
