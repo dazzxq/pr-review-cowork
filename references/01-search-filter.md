@@ -34,10 +34,10 @@ python3 <SKILL_DIR>/scripts/list_reviewers.py
 Output là JSON array các email (đã lowercase + strip), ví dụ:
 
 ```json
-["tuanlehoang@genk.vn", "hainguyenquang@genk.vn"]
+["senior1@example.com", "senior2@example.com"]
 ```
 
-Script đọc env `REVIEWER_EMAILS` trong `<SKILL_DIR>/.env` (comma-separated). Nếu env không set → fallback default 2 sếp. **Không hardcode email trong agent context** — luôn lấy từ script này.
+Script đọc env `REVIEWER_EMAILS` trong `<SKILL_DIR>/.env` (comma-separated). Nếu env chưa set → script in `[]` + warning ra stderr → agent **không skip ai cả** (có thể tạo draft trùng với sếp). **Không hardcode email trong agent context** — luôn lấy từ script này.
 
 Lưu kết quả vào biến `REVIEWERS` trong context để dùng cho mọi thread của run.
 

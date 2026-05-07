@@ -8,10 +8,10 @@ Dùng bởi Cowork agent khi config bật send mode. Agent build trước:
 
 Usage:
   python3 send_email.py \
-    --to kpi_2@admicro.vn \
-    --cc "dangtin@admicro.vn,genk@admicro.vn,banbientap@genk.vn" \
+    --to pr-ops@example.com \
+    --cc "publish-list1@example.com,publish-list2@example.com,editorial@example.com" \
     --subject "Re: [A02] - DUYỆT - GenK - ..." \
-    --in-reply-to "<3C1AYAUB6TU4.16LXBGJFUXDL2@vccloud.vn>" \
+    --in-reply-to "<3C1AYAUB6TU4.16LXBGJFUXDL2@example.com>" \
     --references "<...>" \
     --body-file /tmp/pr-review/<thread_id>/reply.txt
 

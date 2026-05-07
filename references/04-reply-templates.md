@@ -55,15 +55,15 @@ draft.cc   = [a for a in (original.to + original.cc) if a != my_email and a != r
 
 Ví dụ với header thực tế:
 ```
-From:     'Vận hành đăng tin' via GenK | Ban Biên Tập <banbientap@genk.vn>
-Reply-To: Vận hành đăng tin <kpi_2@admicro.vn>
-To:       dangtin@admicro.vn, genk@admicro.vn, banbientap@genk.vn
-Cc:       chivulinh@admicro.vn
+From:     'Vận hành đăng tin' via GenK | Ban Biên Tập <editorial@example.com>
+Reply-To: Vận hành đăng tin <pr-ops@example.com>
+To:       publish-list1@example.com, publish-list2@example.com, editorial@example.com
+Cc:       manager@example.com
 ```
 
 → Draft sẽ là:
-- `to`: `kpi_2@admicro.vn` (Reply-To)
-- `cc`: `dangtin@admicro.vn, genk@admicro.vn, banbientap@genk.vn, chivulinh@admicro.vn` (loại self nếu có trong list)
+- `to`: `pr-ops@example.com` (Reply-To)
+- `cc`: `publish-list1@example.com, publish-list2@example.com, editorial@example.com, manager@example.com` (loại self nếu có trong list)
 
 Gọi Gmail connector:
 ```

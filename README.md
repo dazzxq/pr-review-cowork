@@ -201,15 +201,15 @@ Mail PR thường có nhiều người trong loop. Khi reply, agent tự build r
 
 ```
 Example mail từ vận hành:
-  From:     'Vận hành đăng tin' via GenK | Ban Biên Tập <banbientap@genk.vn>
-  Reply-To: Vận hành đăng tin <kpi_2@admicro.vn>
-  To:       dangtin@admicro.vn, genk@admicro.vn, banbientap@genk.vn
-  Cc:       chivulinh@admicro.vn
+  From:     'Vận hành đăng tin' via GenK | Ban Biên Tập <editorial@example.com>
+  Reply-To: Vận hành đăng tin <pr-ops@example.com>
+  To:       publish-list1@example.com, publish-list2@example.com, editorial@example.com
+  Cc:       manager@example.com
 
 Agent tự tính:
-  draft.to = "kpi_2@admicro.vn"  (Reply-To, fallback From nếu không có Reply-To)
-  draft.cc = ["dangtin@admicro.vn", "genk@admicro.vn", "banbientap@genk.vn",
-              "chivulinh@admicro.vn"]
+  draft.to = "pr-ops@example.com"  (Reply-To, fallback From nếu không có Reply-To)
+  draft.cc = ["publish-list1@example.com", "publish-list2@example.com",
+              "editorial@example.com", "manager@example.com"]
               (gộp original.To + original.Cc, loại self và loại trùng to)
 ```
 
@@ -554,10 +554,10 @@ Mặc định, agent skip thread nếu **bất kỳ** message nào trong thread 
 Mở `.env` (file đã được tạo bởi `setup.sh` từ `.env.example`), tìm dòng:
 
 ```env
-REVIEWER_EMAILS=tuanlehoang@genk.vn,hainguyenquang@genk.vn
+REVIEWER_EMAILS=senior1@example.com,senior2@example.com
 ```
 
-Thêm/bớt email theo team của bạn (comma-separated, lowercase, không dấu cách quanh dấu phẩy). Bỏ trống hoặc xoá dòng này → agent dùng default (2 sếp trên).
+Đổi placeholder bên phải thành email thật của team bạn (comma-separated, lowercase, không dấu cách quanh dấu phẩy). Bỏ trống / xoá dòng này → script in `[]` + warning ra stderr → agent **không skip ai cả** (có thể tạo draft trùng với sếp).
 
 Lần run kế tiếp agent tự áp dụng — không cần sửa `SKILL.md` hay `references/`.
 
@@ -825,8 +825,8 @@ Cowork lưu conversation của mỗi scheduled run trong **Routines tab → clic
 
 ```
 [ok-draft] thread <id>: drafted (verdict=fail, violations=2)
-[ok-sent] thread <id>: gửi tới kpi_2@admicro.vn, cc=4
-[skip-reviewer] thread <id>: replied by hainguyenquang@genk.vn
+[ok-sent] thread <id>: gửi tới pr-ops@example.com, cc=4
+[skip-reviewer] thread <id>: replied by senior2@example.com
 [skip-existing] thread <id>: draft đã tồn tại
 [fallback-draft] thread <id>: SMTP fail (exit 30: auth), tạo draft thay thế
 [error] thread <id>: Bizfly fetch fail

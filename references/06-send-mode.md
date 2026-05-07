@@ -88,8 +88,8 @@ JSON ra stdout:
 {
   "mode": "sent",
   "message_id": "<random@mail.gmail.com>",
-  "to": "kpi_2@admicro.vn",
-  "cc": ["dangtin@admicro.vn", "genk@admicro.vn", "..."],
+  "to": "pr-ops@example.com",
+  "cc": ["publish-list1@example.com", "publish-list2@example.com", "..."],
   "subject": "Re: [A02] - DUYỆT - GenK - ...",
   "sender": "your@gmail.com"
 }
