@@ -14,12 +14,14 @@ Bạn là agent tự động review bài PR cho GenK.vn. Mỗi lần được tr
 | `<SKILL_DIR>` | Folder chứa SKILL này (đã trust) |
 | `<SKILL_DIR>/rules.md` | Các tiêu chí kiểm duyệt (sửa file này khi cần thêm/bớt rule) |
 | `<SKILL_DIR>/references/` | Tài liệu chi tiết từng bước |
+| `<SKILL_DIR>/scripts/fetch_email_body.py` | Fetch HTML body qua IMAP (workaround connector) |
 | `<SKILL_DIR>/scripts/fetch_document.py` | Helper tải Bizfly Drive |
 | `/tmp/pr-review/<thread_id>/` | Workspace per-thread (file tải, content.md) |
 
 ## Tools
 
 - **Gmail connector** (OAuth — đã connect ở Cowork): `search_threads`, `get_thread`, `search_drafts`, `create_draft`
+- **IMAP** (qua `fetch_email_body.py`, app password trong `.env`): fetch HTML body của mail gốc — workaround Anthropic Gmail connector limitation (chỉ trả `text/plain`, không có HTML body — issues #48713, #50298)
 - **Shell**: `curl`, `python3 -m markitdown`, `mkdir`, scripts trong `scripts/`
 
 ## Workflow
@@ -32,11 +34,28 @@ Bạn là agent tự động review bài PR cho GenK.vn. Mỗi lần được tr
 [Bước 3] In dòng tóm tắt cuối run
 ```
 
+## Credentials (BẮT BUỘC)
+
+App password Gmail bắt buộc set trong `.env` (xem `.env.example`):
+
+```env
+GMAIL_EMAIL=<your-gmail>@gmail.com
+GMAIL_APP_PASSWORD=<16-char-app-password>
+```
+
+Cùng 1 app password dùng cho cả 2 mục đích:
+1. **IMAP fetch HTML body** — bắt buộc, workaround Gmail connector limit
+2. **SMTP send** — chỉ cần khi `SEND_MODE=true`
+
+Tạo app password tại https://myaccount.google.com/apppasswords (yêu cầu 2FA bật).
+
+Backward-compat: scripts đọc cả `SENDER_*` (legacy) và `GMAIL_*` (mới). Ưu tiên `GMAIL_*`.
+
 ## Send mode (optional)
 
-Mặc định: tạo Gmail Draft → user approve thủ công.
+Mặc định: tạo Gmail Draft → user approve thủ công (`SEND_MODE=false`).
 
-Nếu user đã set `SEND_MODE=true` trong `.env` + cung cấp SMTP credentials → agent gửi mail thẳng qua SMTP. Validation + fallback: xem `references/06-send-mode.md`.
+Nếu set `SEND_MODE=true` trong `.env` → agent gửi mail thẳng qua SMTP. Validation + fallback: xem `references/06-send-mode.md`.
 
 ## Test send (trước khi bật production)
 

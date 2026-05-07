@@ -91,7 +91,8 @@ Mỗi bài tốn ~5-10 phút, tuần ~30-50 bài → 3-5 giờ/tuần. Nhiều b
 | **SKILL.md** | Orchestrator top-level (~60 dòng, progressive disclosure) |
 | **references/*.md** | Tài liệu chi tiết từng bước, load on-demand |
 | **rules.md** | Single source of truth cho tiêu chí review |
-| **Gmail Connector** | OAuth, không cần app password — search/read/draft mail |
+| **Gmail Connector** | OAuth, không cần app password — search/read metadata/draft mail |
+| **fetch_email_body.py** | IMAP fetch HTML body của mail gốc — workaround connector limit (xem [Tại sao cần IMAP](#tại-sao-cần-imap)) |
 | **fetch_document.py** | Tải file Bizfly Drive qua HTTP direct (không cần browser) |
 | **markitdown** | Convert .docx → markdown để LLM đọc dễ |
 | **send_email.py** | SMTP send (chỉ khi `SEND_MODE=true`) |
@@ -353,24 +354,47 @@ Verify: vào **Routines** tab → click task → check field "Working folder" c�
 
 ## Cấu hình `.env`
 
-File `.env` được tạo từ `.env.example` lúc `setup.sh`. Mặc định mọi thứ off — chỉ tạo Gmail Draft, an toàn.
+File `.env` được tạo từ `.env.example` lúc `setup.sh`. App password Gmail giờ **bắt buộc** (cho IMAP fetch HTML body — workaround Anthropic Gmail connector limitation, xem section ["Tại sao cần IMAP"](#tại-sao-cần-imap)).
 
 ```bash
+# ─── Gmail credentials (BẮT BUỘC) ────────────────────────────────
+# Dùng cho cả IMAP fetch HTML body lẫn SMTP send
+GMAIL_EMAIL=your@gmail.com
+GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx   # 16 chars, có thể có space
+
 # ─── Mode ────────────────────────────────────────────────────────
 # false = chỉ tạo Gmail Draft (mặc định, an toàn)
-# true  = gửi thẳng qua SMTP (cần credentials)
+# true  = gửi thẳng qua SMTP (yêu cầu GMAIL_* ở trên)
 SEND_MODE=false
 
-# ─── SMTP credentials (chỉ cần khi SEND_MODE=true) ──────────────
-SENDER_EMAIL=
-SENDER_APP_PASSWORD=
+# ─── IMAP server (mặc định OK cho Gmail/Workspace) ──────────────
+IMAP_HOST=imap.gmail.com
+IMAP_PORT=993
 
 # ─── SMTP server (mặc định OK cho Gmail/Workspace) ──────────────
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=465
 ```
 
+**Backward-compat**: scripts đọc cả `SENDER_*` (legacy) và `GMAIL_*` (mới). User cũ với `.env` chứa `SENDER_EMAIL`/`SENDER_APP_PASSWORD` vẫn work — không cần migrate ngay.
+
 **`.env` đã được `.gitignore`** — không commit secrets vào repo.
+
+### Tại sao cần IMAP
+
+Anthropic Gmail connector trong Cowork chỉ trả `text/plain` part của email. Mail DUYỆT từ kpi.admicro.vn là **HTML-only** (không có text/plain part) → connector trả body rỗng → snippet bị truncate ngay chỗ link Bizfly → không parse được URL để tải file.
+
+Đây là **limitation đã biết** của connector ([issues #48713](https://github.com/anthropics/claude-code/issues/48713), [#50298](https://github.com/anthropics/claude-code/issues/50298)), open từ tháng 4/2026 chưa fix.
+
+**Workaround**: Hybrid OAuth + IMAP architecture:
+
+| Operation | Method | Cần creds? |
+|-----------|--------|------------|
+| `search_threads`, `get_thread` (metadata), `search_drafts`, `create_draft` | Gmail connector (OAuth) | Không |
+| Fetch HTML body của mail gốc | IMAP qua `fetch_email_body.py` (app password) | **Có (`GMAIL_*`)** |
+| Send draft thẳng (optional) | SMTP qua `send_email.py` (app password) | Có (`SEND_MODE=true`) |
+
+Cùng 1 app password dùng cho cả IMAP + SMTP. Tạo tại [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords).
 
 ---
 
@@ -390,8 +414,9 @@ Run python3 ~/pr-review-cowork/scripts/test_cowork_network.py and show full outp
 
 ⚠️ **Tránh prompt vague** như `"test the cowork network reachability"` — Cowork sẽ improvise với generic domains thay vì chạy đúng script. Phải invoke script trực tiếp bằng path.
 
-Expected output: 3/3 endpoint ✓ OK với latency:
+Expected output: 4/4 endpoint ✓ OK với latency:
 - `bizflycloud.vn:443` ✓ OK (~1000ms ổn)
+- `imap.gmail.com:993` ✓ OK (~130ms) — fetch HTML body
 - `smtp.gmail.com:465` ✓ OK (~50ms)
 - `www.google.com:443` ✓ OK (~100ms)
 
@@ -481,10 +506,10 @@ Chi tiết: `references/07-test-send.md`.
 2. Edit `.env`:
    ```bash
    SEND_MODE=true
-   SENDER_EMAIL=your@gmail.com
-   SENDER_APP_PASSWORD=xxxx xxxx xxxx xxxx   # 16 ký tự, có thể có space
+   GMAIL_EMAIL=your@gmail.com
+   GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx   # 16 ký tự, có thể có space
    ```
-3. **Cowork settings → Network egress → allow `smtp.gmail.com:465`** (Cowork mặc định chặn outbound)
+3. **Cowork settings → Network egress → allow `smtp.gmail.com:465`** + `imap.gmail.com:993` (Cowork mặc định chặn outbound)
 
 ### Validation logic
 
@@ -494,8 +519,8 @@ Khi `SEND_MODE=true`, mỗi mail đi qua:
 |------|--------|-----------|
 | 0 | Gửi thành công | `SENT += 1`, log success |
 | 10 | `SEND_MODE` chưa true | Fallback draft (impossible reach normally) |
-| 11 | `SENDER_EMAIL` trống | Fallback draft + log warning |
-| 12 | `SENDER_APP_PASSWORD` trống | Fallback draft + log warning |
+| 11 | `GMAIL_EMAIL` (hoặc `SENDER_EMAIL`) trống | Fallback draft + log warning |
+| 12 | `GMAIL_APP_PASSWORD` (hoặc `SENDER_APP_PASSWORD`) trống | Fallback draft + log warning |
 | 20 | Body file lỗi | Log error, count ERROR (không fallback — lỗi nội bộ) |
 | 30 | SMTP auth failed | Fallback draft + log error rõ |
 | 31-33 | SMTP/network | Fallback draft + log error |
@@ -620,11 +645,12 @@ pr-review-cowork/
 │   └── 08-cowork-network.md       ← Test Cowork egress + cách config allowlist
 │
 ├── scripts/
+│   ├── fetch_email_body.py        ← IMAP fetch HTML body (workaround connector — xem README)
 │   ├── fetch_document.py          ← Tải Bizfly Drive (curl direct, no browser)
 │   ├── list_reviewers.py          ← In JSON skip-list (đọc REVIEWER_EMAILS từ .env)
 │   ├── send_email.py              ← SMTP send (production, SEND_MODE=true)
 │   ├── test_send.py               ← Self-test SMTP + rotate reminder
-│   └── test_cowork_network.py     ← TCP probe Bizfly/SMTP/Internet (no creds)
+│   └── test_cowork_network.py     ← TCP probe Bizfly/IMAP/SMTP/Internet (no creds)
 │
 └── .venv/                         ← Tạo bởi setup.sh (gitignored)
 ```
@@ -637,12 +663,21 @@ pr-review-cowork/
 
 ### Gmail Connector (Cowork native)
 
-OAuth-based, không cần app password cho phần draft. Tools available:
+OAuth-based, không cần app password cho phần search/metadata/draft. Tools available:
 
 - `search_threads(query)` — search Gmail với Gmail query syntax
-- `get_thread(id)` — đọc full messages của 1 thread
+- `get_thread(id)` — đọc messages metadata của 1 thread (KHÔNG có HTML body — xem [Tại sao cần IMAP](#tại-sao-cần-imap))
 - `search_drafts(query)` — search trong Drafts folder (cho idempotency)
 - `create_draft(thread_id, to, cc, subject, body)` — tạo draft
+
+### IMAP (`fetch_email_body.py`)
+
+Workaround Anthropic Gmail connector limitation. App password Gmail từ `.env` (`GMAIL_*`). Stdlib `imaplib` + `email.policy.default`. Strategy:
+
+1. Primary: `X-GM-MSGID <decimal>` (Gmail extension, exact match cho mail gốc theo connector `messages[0].id`)
+2. Fallback: `X-GM-THRID <decimal>` + `UID FETCH (UID INTERNALDATE)` → pick earliest
+
+8 exit codes phân biệt rõ infra issue (1/2/3/7) vs data issue (4/5/6) — agent loop dùng để retry/circuit-breaker đúng cách.
 
 ### Shell (Cowork VM)
 
@@ -653,6 +688,7 @@ Cowork VM có:
 
 Network egress mặc định **bị hạn chế** — phải allowlist domain. Cần allow:
 - `*.drive.bfcplatform.vn` (Bizfly Drive)
+- `imap.gmail.com:993` (LUÔN cần — fetch HTML body)
 - `smtp.gmail.com:465` (chỉ khi SEND_MODE=true)
 
 ### `markitdown`

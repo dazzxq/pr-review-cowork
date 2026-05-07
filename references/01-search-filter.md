@@ -1,5 +1,27 @@
 # Bước 1 — Search Gmail + Filter
 
+## Preflight (đầu run, chạy 1 lần)
+
+Verify IMAP creds + mailbox accessible trước khi loop threads. Pipeline cần IMAP để fetch HTML body (workaround Anthropic Gmail connector limit — connector không trả HTML body cho mail HTML-only).
+
+```bash
+# KHÔNG suppress stderr — cần thấy actual error message để diagnose
+python3 <SKILL_DIR>/scripts/fetch_email_body.py --check-creds
+PRE_EC=$?
+if [ $PRE_EC -ne 0 ]; then
+    case $PRE_EC in
+      1) echo "FATAL: GMAIL_EMAIL/GMAIL_APP_PASSWORD chưa set trong .env" ;;
+      2) echo "FATAL: app password sai (auth fail)" ;;
+      3) echo "FATAL: không resolve/select được All Mail mailbox" ;;
+      7) echo "FATAL: IMAP network/SSL fail" ;;
+      *) echo "FATAL: preflight exit $PRE_EC" ;;
+    esac
+    exit 1
+fi
+```
+
+Nếu preflight fail → run dừng ngay với message rõ. Không tiếp tục loop threads vì sẽ fail mọi thread.
+
 ## Search threads
 
 Dùng Gmail connector `search_threads`:

@@ -4,7 +4,7 @@ Verify config SMTP trước khi bật `SEND_MODE=true` cho production. **Self-se
 
 ## Khi nào dùng
 
-- Lần đầu setup `.env` với `SENDER_EMAIL` + `SENDER_APP_PASSWORD`
+- Lần đầu setup `.env` với `GMAIL_EMAIL` + `GMAIL_APP_PASSWORD` (hoặc legacy `SENDER_*`)
 - Sau khi rotate app password
 - Khi nghi ngờ Cowork egress chặn SMTP
 - Khi pipeline báo lỗi auth/timeout không rõ nguyên nhân
@@ -40,8 +40,8 @@ python3 scripts/test_send.py --dry-run
 
 ```
 [1] User edit .env:
-      SENDER_EMAIL=you@gmail.com
-      SENDER_APP_PASSWORD=xxxx xxxx xxxx xxxx
+      GMAIL_EMAIL=you@gmail.com
+      GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
 
 [2] User chạy test:
       python3 scripts/test_send.py

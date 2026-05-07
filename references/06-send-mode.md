@@ -36,15 +36,18 @@ cp .env.example .env
 
 ```bash
 SEND_MODE=true
-SENDER_EMAIL=your@gmail.com           # email Gmail/Workspace của bạn
-SENDER_APP_PASSWORD=xxxx xxxx xxxx xxxx
+GMAIL_EMAIL=your@gmail.com           # email Gmail/Workspace của bạn
+GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
 ```
+
+(Backward-compat: `SENDER_EMAIL` / `SENDER_APP_PASSWORD` cũng work — script đọc cả 2 prefix.)
 
 ### 4. (Cowork) Allow SMTP egress
 
 Cowork mặc định chặn outbound network. Mở Cowork settings → Network egress → allow:
 ```
 smtp.gmail.com:465
+imap.gmail.com:993   # cũng cần — fetch HTML body workaround connector
 ```
 
 Nếu Cowork chưa cho phép, agent sẽ exit 33 (network error) và fallback sang draft.
@@ -57,8 +60,8 @@ Script validate theo thứ tự, exit ngay khi gặp lỗi:
 |------|--------|---------------------|
 | 0 | OK, mail đã gửi | Log success, count SENT |
 | 10 | `SEND_MODE` chưa true | Fallback sang draft |
-| 11 | `SENDER_EMAIL` trống | Fallback sang draft + log warning |
-| 12 | `SENDER_APP_PASSWORD` trống | Fallback sang draft + log warning |
+| 11 | `GMAIL_EMAIL` (hoặc `SENDER_EMAIL`) trống | Fallback sang draft + log warning |
+| 12 | `GMAIL_APP_PASSWORD` (hoặc `SENDER_APP_PASSWORD`) trống | Fallback sang draft + log warning |
 | 20 | Body file lỗi (không có / rỗng) | Log error, count ERROR, KHÔNG fallback (lỗi nội bộ) |
 | 30 | SMTP auth failed | Fallback sang draft + log error rõ |
 | 31 | Recipient bị reject | Fallback sang draft + log error |
@@ -73,7 +76,7 @@ Stderr của script đã chứa thông điệp tiếng Việt human-readable. Ag
 1. **Account không bật 2FA** → tạo app password fail từ trước. Khi gửi → exit 30 (auth fail).
 2. **Workspace admin tắt app password** → tương tự, exit 30. User cần liên hệ IT.
 3. **App password có dấu cách** (Google copy với spaces) → script tự strip.
-4. **`SENDER_EMAIL` khác account đã connect Cowork** → vẫn gửi được (SMTP auth dùng SENDER_EMAIL), nhưng Sent Mail đi vào account đó, không phải account Cowork. Khuyến nghị: trùng nhau.
+4. **`GMAIL_EMAIL` khác account đã connect Cowork** → vẫn gửi được (SMTP auth dùng GMAIL_EMAIL), nhưng Sent Mail đi vào account đó, không phải account Cowork. Khuyến nghị: trùng nhau (cùng cũng là account dùng cho IMAP fetch).
 5. **Self trong cc list** → script tự loại.
 6. **`to` cũng có trong `cc`** (lỡ duplicate) → script tự loại khỏi cc.
 7. **Empty body** → exit 20.

@@ -40,6 +40,7 @@ python3 <SKILL_DIR>/scripts/test_cowork_network.py
 | Endpoint | Cần khi | Bị chặn → hậu quả |
 |----------|---------|-------------------|
 | `bizflycloud.vn:443` | LUÔN | Không tải được Bizfly Drive → toàn bộ DUYỆT pipeline fail |
+| `imap.gmail.com:993` | LUÔN | Không fetch được HTML body (workaround connector) → DUYỆT pipeline fail (preflight `--check-creds` sẽ fatal abort) |
 | `smtp.gmail.com:465` | `SEND_MODE=true` | SMTP fail → fallback sang draft mode (vẫn an toàn) |
 | `www.google.com:443` | Control | Cowork không có Internet (rare, chắc Cowork bug) |
 
@@ -70,6 +71,7 @@ Admin config:
 - Mode: "All domains" (recommended)
 - Hoặc "Package managers only + additional" với:
   - `bizflycloud.vn`, `*.bfcplatform.vn` (tenant subdomain)
+  - `imap.gmail.com` (LUÔN cần — fetch HTML body)
   - `smtp.gmail.com` (chỉ khi cần SEND_MODE)
   - `*.gmail.com`
 
@@ -84,6 +86,9 @@ Admin config:
 
   bizflycloud.vn:443  — Bizfly infra
     ✓ OK (45 ms)
+
+  imap.gmail.com:993  — IMAP fetch HTML body (workaround Anthropic Gmail connector)
+    ✓ OK (129 ms)
 
   smtp.gmail.com:465  — SMTP send
     ✓ OK (39 ms)
@@ -127,6 +132,7 @@ Nếu chạy TRONG COWORK:
 Nếu admin/policy không cho phép expand egress (bash vẫn air-gapped):
 
 - **Bizfly fetch DOA** → không tải được file Word của bài → không review được nội dung
+- **IMAP fetch DOA** → không lấy được HTML body → không parse Bizfly URL → DUYỆT pipeline preflight fatal abort
 - **SMTP DOA** → giữ `SEND_MODE=false` (Gmail connector vẫn tạo được draft, không qua bash)
 - **Toàn bộ DUYỆT pipeline DOA** → flow Cowork-Lite không khả thi
 
@@ -136,8 +142,11 @@ Nếu admin/policy không cho phép expand egress (bash vẫn air-gapped):
 
 Trước khi share repo này cho team:
 1. Test trên 1 máy của member với Cowork config tương đương team
-2. Chạy prompt `"test the cowork network reachability"` trong Cowork session của họ
-3. Nếu cả 3 endpoint ✓ OK → ship Cowork-Lite
+2. Chạy explicit script path trong Cowork session của họ:
+   ```
+   Run python3 ~/pr-review-cowork/scripts/test_cowork_network.py and show full output.
+   ```
+3. Nếu cả 4 endpoint ✓ OK → ship Cowork-Lite
 4. Nếu fail → ship Path A (launchd) thay thế, accept setup phức tạp hơn
 
 ## Phân biệt với `test_send.py`

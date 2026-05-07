@@ -2,9 +2,96 @@
 
 Áp dụng khi `mail_type='duyet'`. Tuần tự 6 step. Nếu lỗi giữa chừng: log + đi thread tiếp.
 
-## Step 1 — Extract field từ body mail GỐC
+**Init đầu run** (trước khi loop threads):
+```bash
+IMAP_FAILS=0           # Counter cho circuit breaker (Step 1a)
+IMAP_MAX_FAILS=${IMAP_MAX_FAILS:-3}  # Default 3, override qua env
+```
 
-Body mail DUYỆT là HTML đơn giản:
+## Step 1 — Fetch HTML body + extract field từ mail GỐC
+
+### Step 1a — Fetch HTML body qua IMAP
+
+**Tại sao cần IMAP**: Anthropic Gmail connector chỉ trả `text/plain` part. Mail DUYỆT từ kpi.admicro.vn là HTML-only → connector trả body rỗng → không parse được Bizfly URL. Workaround: fetch raw RFC822 qua IMAP, parse text/html part. Issues #48713, #50298 trên GitHub Anthropic, chưa fix.
+
+```bash
+fetch_with_retry() {
+    python3 <SKILL_DIR>/scripts/fetch_email_body.py \
+        --thread-id "$1" \
+        --gmail-msg-id "$2"
+}
+
+# Pass --gmail-msg-id từ connector messages[0].id để X-GM-MSGID exact match
+BODY=$(fetch_with_retry "$THREAD_ID" "$MSG_ID")
+EC=$?
+
+# Deterministic retry cho transient (exit 7) — sleep 5s + retry once
+if [ $EC -eq 7 ]; then
+    sleep 5
+    BODY=$(fetch_with_retry "$THREAD_ID" "$MSG_ID")
+    EC=$?
+fi
+
+case $EC in
+  0)
+    # Success — reset breaker counter
+    IMAP_FAILS=0
+    ;;
+  1|2|3)
+    # Infra issue (creds/auth/mailbox) — trip breaker
+    IMAP_FAILS=$((IMAP_FAILS+1))
+    log "[error] thread $THREAD_ID: IMAP infra (exit $EC) — fail $IMAP_FAILS/$IMAP_MAX_FAILS"
+    if [ $IMAP_FAILS -ge $IMAP_MAX_FAILS ]; then
+        log "[fatal] dừng run sớm: $IMAP_FAILS lỗi IMAP infra liên tiếp"
+        exit 1
+    fi
+    ERRORS=$((ERRORS+1)); continue
+    ;;
+  4|5|6)
+    # Data issue (bad thread-id, empty thread, no body) — KHÔNG trip breaker, KHÔNG reset
+    log "[error] thread $THREAD_ID: data issue exit $EC"
+    ERRORS=$((ERRORS+1)); continue
+    ;;
+  7)
+    # Transient sau retry vẫn fail — count vào breaker
+    IMAP_FAILS=$((IMAP_FAILS+1))
+    log "[error] thread $THREAD_ID: IMAP transient (exit 7) sau retry — fail $IMAP_FAILS/$IMAP_MAX_FAILS"
+    if [ $IMAP_FAILS -ge $IMAP_MAX_FAILS ]; then
+        log "[fatal] dừng run sớm: $IMAP_FAILS lỗi transient liên tiếp"
+        exit 1
+    fi
+    ERRORS=$((ERRORS+1)); continue
+    ;;
+  *)
+    log "[error] thread $THREAD_ID: unknown exit $EC"
+    ERRORS=$((ERRORS+1)); continue
+    ;;
+esac
+```
+
+**Retry semantics**:
+- `exit 7` (transient network/SSL/parse) → sleep 5s → retry **once**
+  - Retry success → reset `IMAP_FAILS=0`
+  - Retry fail (any exit) → fall through case branch để count vào breaker
+- `exit 1/2/3` (infra creds/auth/mailbox) → KHÔNG retry, count vào breaker
+- `exit 4/5/6` (data per-thread) → KHÔNG retry, KHÔNG count, KHÔNG reset (data lỗi không nên hide infra issue đang xen kẽ)
+
+**Exit codes** từ `fetch_email_body.py`:
+
+| Code | Ý nghĩa |
+|------|---------|
+| 0 | OK, body ra stdout |
+| 1 | Creds missing trong .env |
+| 2 | IMAP login fail (auth) |
+| 3 | Mailbox select fail |
+| 4 | Thread ID format invalid |
+| 5 | Thread thật sự không có message |
+| 6 | Body parse fail (không text/html lẫn text/plain) |
+| 7 | Network/IMAP transient / parse metadata |
+
+### Step 1b — Extract field từ HTML body
+
+Body fetched ở Step 1a là HTML đơn giản (mail từ kpi.admicro.vn):
 
 ```html
 <p>Bạn có yêu cầu <strong>Duyệt bài</strong> như sau:</p>
@@ -24,7 +111,7 @@ Extract (regex hoặc đọc thông minh, case-insensitive cho key):
 
 Field optional (`so_hop_dong`, `gia_tri`...) — không cần extract trong Cowork-Lite. Reply không in lại các trường này.
 
-**Nếu `bizfly_url` rỗng**: log `[error] thread <id>: không tìm thấy Bizfly URL`, tăng `ERRORS`, đi thread tiếp.
+**Nếu `bizfly_url` rỗng**: log `[error] thread <id>: không tìm thấy Bizfly URL`, tăng `ERRORS`, đi thread tiếp (data issue, không trip breaker).
 
 ## Step 2 — Fetch Bizfly document
 
@@ -113,7 +200,7 @@ python3 <SKILL_DIR>/scripts/send_email.py \
 
 Xử lý exit code:
 - **Exit 0** → gửi OK. Parse JSON output. `SENT += 1`. Log: `[ok-sent] thread <id>: gửi tới <to>, cc=<n>`.
-- **Exit 10/11/12** → config thiếu (SEND_MODE/SENDER_EMAIL/SENDER_APP_PASSWORD). Log error rõ cho user. **FALLBACK** sang 6B (tạo draft).
+- **Exit 10/11/12** → config thiếu (SEND_MODE/GMAIL_EMAIL/GMAIL_APP_PASSWORD). Log error rõ cho user. **FALLBACK** sang 6B (tạo draft).
 - **Exit 30** → SMTP auth failed (sai password). Log error. **FALLBACK** sang 6B.
 - **Exit 31/32/33** → SMTP/network error. Log error. **FALLBACK** sang 6B.
 - **Exit 20/99** → body file lỗi / unknown. Log error, count `ERRORS += 1`, đi thread tiếp (không fallback vì có thể repeat lỗi).
