@@ -551,23 +551,27 @@ Mặc định, agent skip thread nếu **bất kỳ** message nào trong thread 
 
 ### Sửa skip-list
 
-Mở `references/01-search-filter.md`, mục **Filter 1**, sửa danh sách email:
+Mở `.env` (file đã được tạo bởi `setup.sh` từ `.env.example`), tìm dòng:
 
-```
-- `tuanlehoang@genk.vn`
-- `hainguyenquang@genk.vn`
+```env
+REVIEWER_EMAILS=tuanlehoang@genk.vn,hainguyenquang@genk.vn
 ```
 
-Thêm/bớt email theo team của bạn. Lần run kế tiếp agent tự áp dụng.
+Thêm/bớt email theo team của bạn (comma-separated, lowercase, không dấu cách quanh dấu phẩy). Bỏ trống hoặc xoá dòng này → agent dùng default (2 sếp trên).
+
+Lần run kế tiếp agent tự áp dụng — không cần sửa `SKILL.md` hay `references/`.
 
 ### Logic
 
 ```
+REVIEWERS = run("python3 scripts/list_reviewers.py")  # JSON array từ env hoặc default
 for thread in threads:
     messages = get_thread(thread.id).messages
-    if any(m.from in skip_list for m in messages):
+    if any(any(r in m.from.lower() for r in REVIEWERS) for m in messages):
         skip thread
 ```
+
+`scripts/list_reviewers.py` đọc env `REVIEWER_EMAILS` (qua `.env`) → in JSON array → agent parse 1 lần đầu run, dùng cho mọi thread.
 
 ---
 
@@ -595,6 +599,7 @@ pr-review-cowork/
 │
 ├── scripts/
 │   ├── fetch_document.py          ← Tải Bizfly Drive (curl direct, no browser)
+│   ├── list_reviewers.py          ← In JSON skip-list (đọc REVIEWER_EMAILS từ .env)
 │   ├── send_email.py              ← SMTP send (production, SEND_MODE=true)
 │   ├── test_send.py               ← Self-test SMTP + rotate reminder
 │   └── test_cowork_network.py     ← TCP probe Bizfly/SMTP/Internet (no creds)

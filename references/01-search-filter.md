@@ -21,14 +21,31 @@ original = messages[0]   # mail đầu tiên (chronological)
 
 Gmail API trả messages theo thứ tự thời gian, message[0] là mail gốc (DUYỆT/ĐĂNG request đầu tiên). **Tuyệt đối không dùng reply** — body reply không có cấu trúc field DUYỆT.
 
-## Filter 1 — Skip nếu sếp đã reply
+## Filter 1 — Skip nếu senior reviewer đã reply
 
-Loop qua tất cả `messages` của thread. Nếu **bất kỳ** message nào có `from` chứa 1 trong:
+### Đọc skip-list 1 lần đầu run
 
-- `tuanlehoang@genk.vn`
-- `hainguyenquang@genk.vn`
+Trước khi loop threads, agent chạy:
 
-→ **SKIP toàn bộ thread**. Log: `[skip-reviewer] thread <id>: replied by <email>`. Tăng counter `SKIPPED_REVIEWER`.
+```bash
+python3 <SKILL_DIR>/scripts/list_reviewers.py
+```
+
+Output là JSON array các email (đã lowercase + strip), ví dụ:
+
+```json
+["tuanlehoang@genk.vn", "hainguyenquang@genk.vn"]
+```
+
+Script đọc env `REVIEWER_EMAILS` trong `<SKILL_DIR>/.env` (comma-separated). Nếu env không set → fallback default 2 sếp. **Không hardcode email trong agent context** — luôn lấy từ script này.
+
+Lưu kết quả vào biến `REVIEWERS` trong context để dùng cho mọi thread của run.
+
+### Loop check
+
+Loop qua tất cả `messages` của thread. Với mỗi message, lowercase `from` rồi check có chứa **bất kỳ** email nào trong `REVIEWERS` không:
+
+→ Match → **SKIP toàn bộ thread**. Log: `[skip-reviewer] thread <id>: replied by <email>`. Tăng counter `SKIPPED_REVIEWER`.
 
 Lý do: đây là sếp duyệt thủ công. Tạo draft auto sẽ trùng/sai.
 
@@ -56,10 +73,11 @@ Từ `original.subject` (case-insensitive):
 ## Decision tree tóm tắt
 
 ```
+REVIEWERS ← json.parse(run("python3 <SKILL_DIR>/scripts/list_reviewers.py"))
 threads ← search_threads(query)
 for thread in threads:
     messages ← get_thread(thread.id).messages
-    if any(m.from in {tuanlehoang, hainguyenquang} for m in messages):
+    if any(any(r in m.from.lower() for r in REVIEWERS) for m in messages):
         SKIPPED_REVIEWER += 1; log; continue
 
     drafts ← search_drafts(f"thread:{thread.id}")

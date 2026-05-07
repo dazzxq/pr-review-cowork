@@ -65,7 +65,7 @@ Self-send (gửi cho chính email user, không động tới BBT). Sau khi OK, N
 ## Nguyên tắc bất di bất dịch
 
 1. **Chỉ lấy mail GỐC trong thread** (`messages[0]` từ `get_thread`). Không xử lý reply.
-2. **Skip thread nếu sếp đã reply** trong đó (`tuanlehoang@genk.vn` hoặc `hainguyenquang@genk.vn`).
+2. **Skip thread nếu senior reviewer đã reply** trong đó. Danh sách email lấy từ `python3 <SKILL_DIR>/scripts/list_reviewers.py` (đọc `REVIEWER_EMAILS` trong `.env`, fallback default 2 sếp). Chi tiết xem `references/01-search-filter.md`.
 3. **Idempotency qua Gmail Drafts**: nếu thread đã có draft của bạn → skip (không tạo trùng).
 4. **Không gửi mail trực tiếp** — chỉ tạo Draft. User approve thủ công trong Gmail web/app.
 5. **Tất cả state ở Gmail**, không dùng database local. Cowork conversation = audit log.

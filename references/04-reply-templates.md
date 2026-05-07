@@ -47,7 +47,7 @@ Lấy từ headers của mail GỐC (`messages[0]`):
 
 Pseudo-code:
 ```python
-my_email = "thanhnguyendinh@genk.vn"  # email connect Gmail của bạn
+my_email = "<your_email>@example.com"  # email connect Gmail của bạn
 reply_to = original.headers.get("Reply-To") or original.from_
 draft.to   = [reply_to]
 draft.cc   = [a for a in (original.to + original.cc) if a != my_email and a != reply_to]
