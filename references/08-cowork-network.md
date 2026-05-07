@@ -2,6 +2,16 @@
 
 Verify Cowork VM cho phép outbound network tới các endpoint cần thiết. Phải chạy **trong Cowork conversation** (qua shell trong VM của Cowork) — chạy local terminal chỉ test máy bạn, không phản ánh sandbox của Cowork.
 
+> ⚠️ **Quan trọng — bash mặc định AIR-GAPPED hoàn toàn**
+>
+> Trong nhiều Cowork config (đặc biệt Pro/Max default + Team/Enterprise), bash sandbox **không có network interface ngoài loopback** — không phải allowlist hạn chế, mà literally không có route ra ngoài. Trong trường hợp này:
+>
+> - `curl`/`wget`/`ping` bất kỳ endpoint nào đều fail (DNS unreachable)
+> - Scripts `fetch_document.py`, `send_email.py`, `test_send.py`, `test_cowork_network.py` đều DOA
+> - Chỉ Gmail Connector (MCP, runs OUTSIDE bash) còn hoạt động
+>
+> Để flow này chạy được, **bắt buộc** enable bash network egress (xem mục dưới). Nếu admin/policy không cho enable → flow Cowork-Lite KHÔNG dùng được. Phải dùng Path A (launchd local) thay thế.
+
 ## Khi nào dùng
 
 - Lần đầu setup, trước khi để task scheduled chạy
@@ -35,7 +45,13 @@ python3 <SKILL_DIR>/scripts/test_cowork_network.py
 
 ## Cowork Network Egress configuration
 
-Cowork mặc định **chặn outbound** đa số domain (chỉ Anthropic API + một số package managers được auto-allow). Cần config thủ công.
+Cowork mặc định **air-gap bash sandbox**. WebFetch MCP có allowlist cứng:
+- `pypi.org`, `npmjs.com`, `yarnpkg.com`, `crates.io` (package managers)
+- `github.com`, `objects.githubusercontent.com`
+- `archive.ubuntu.com`, `security.ubuntu.com`
+- `anthropic.com`, `claude.com`, `*.anthropic.com`
+
+→ Không có Bizfly, không có Gmail SMTP. Phải config thủ công để bash có TCP outbound.
 
 ### Pro / Max plan (single-user)
 
@@ -108,10 +124,21 @@ Nếu chạy TRONG COWORK:
 
 ## Khi không thể allowlist (workspace lock-down)
 
-Nếu admin không cho phép expand egress:
+Nếu admin/policy không cho phép expand egress (bash vẫn air-gapped):
 
-- **Bizfly fail** → flow này không dùng được trong Cowork. Phải dùng Path A (launchd local) hoặc workaround khác (như chạy fetch trên máy local rồi sync).
-- **SMTP fail** → giữ `SEND_MODE=false`. Cowork connector `create_draft` không cần SMTP egress, vẫn chạy được. User chỉ phải approve manual trong Gmail.
+- **Bizfly fetch DOA** → không tải được file Word của bài → không review được nội dung
+- **SMTP DOA** → giữ `SEND_MODE=false` (Gmail connector vẫn tạo được draft, không qua bash)
+- **Toàn bộ DUYỆT pipeline DOA** → flow Cowork-Lite không khả thi
+
+→ Phải dùng **Path A (launchd local)** trên máy user, không qua Cowork. Tham khảo repo gốc Path A nếu có. Cowork-Lite chỉ phù hợp khi bash sandbox có TCP outbound.
+
+### Cách quyết định distribute cho team
+
+Trước khi share repo này cho team:
+1. Test trên 1 máy của member với Cowork config tương đương team
+2. Chạy prompt `"test the cowork network reachability"` trong Cowork session của họ
+3. Nếu cả 3 endpoint ✓ OK → ship Cowork-Lite
+4. Nếu fail → ship Path A (launchd) thay thế, accept setup phức tạp hơn
 
 ## Phân biệt với `test_send.py`
 
