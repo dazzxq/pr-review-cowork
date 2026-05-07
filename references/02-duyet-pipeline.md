@@ -209,20 +209,72 @@ Output stderr của script đã human-readable — relay nguyên văn cho user t
 
 ### Nhánh 6B — Tạo Gmail Draft (default)
 
-Dùng Gmail connector:
-```
-create_draft(
-  thread_id: <thread_id>,
-  to: <to_email>,
-  cc: <cc_list joined by ", ">,
-  subject: "Re: <original_subject>",  (chỉ thêm "Re: " nếu chưa có)
-  body: <reply text — đọc từ file /tmp/pr-review/<thread_id>/reply.txt>,
-)
+Build threading headers từ `THREAD_DATA` (output của `imap_get_thread.py`):
+
+```bash
+LATEST_MSG_ID=$(echo "$THREAD_DATA" | python3 -c 'import json,sys; m=json.load(sys.stdin)["messages"][-1]; print(m["message_id"])')
+ORIGINAL_REFS=$(echo "$THREAD_DATA" | python3 -c 'import json,sys; m=json.load(sys.stdin)["messages"][-1]; print(m.get("references","") or "")')
+
+# References chain: append latest message_id nếu CHƯA có (tránh duplicate)
+REFERENCES_CHAIN=$(python3 -c "
+import sys
+original = sys.argv[1].strip()
+latest = sys.argv[2].strip()
+existing = original.split() if original else []
+if latest and latest not in existing:
+    existing.append(latest)
+print(' '.join(existing))
+" "$ORIGINAL_REFS" "$LATEST_MSG_ID")
 ```
 
-Xử lý:
-- Thành công → `DRAFTED += 1`. Log: `[ok-draft] thread <id>: drafted (verdict=<v>, violations=<n>)`.
-- Connector lỗi → `ERRORS += 1`. Log: `[error] thread <id>: create_draft fail: <msg>`. Đi thread tiếp.
+Tạo draft qua IMAP APPEND:
+
+```bash
+DRAFT_JSON=$(python3 <SKILL_DIR>/scripts/imap_create_draft.py \
+    --to "$TO_EMAIL" \
+    --cc "$CC_LIST" \
+    --subject "$ORIGINAL_SUBJECT" \
+    --in-reply-to "$LATEST_MSG_ID" \
+    --references "$REFERENCES_CHAIN" \
+    --body-file /tmp/pr-review/$THREAD_ID/reply.txt \
+    --thread-id "$THREAD_ID")
+EC=$?
+```
+
+**Contract**: APPEND success luôn exit 0 — kiểm tra JSON fields. Non-zero exit chỉ cho IMAP errors thực sự.
+
+```bash
+if [ $EC -eq 0 ]; then
+    SKIPPED=$(echo "$DRAFT_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["skipped"])')
+    THREAD_MATCH=$(echo "$DRAFT_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["thread_match"])')
+    WARNING=$(echo "$DRAFT_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("warning") or "")')
+    if [ "$SKIPPED" = "True" ]; then
+        log "[ok-draft-skipped] thread $THREAD_ID: dedup match (existing draft)"
+    elif [ "$THREAD_MATCH" = "True" ]; then
+        log "[ok-draft] thread $THREAD_ID: drafted + threaded (verdict=$VERDICT)"
+    else
+        log "[warn-draft] thread $THREAD_ID: drafted nhưng KHÔNG thread đúng — $WARNING"
+    fi
+    DRAFTED=$((DRAFTED+1))
+elif [ $EC -eq 7 ]; then
+    log "[error] thread $THREAD_ID: APPEND IMAP fail (transient)"
+    ERRORS=$((ERRORS+1))
+else
+    log "[error] thread $THREAD_ID: create_draft exit $EC"
+    ERRORS=$((ERRORS+1))
+fi
+```
+
+**Field mapping** (từ `imap_get_thread.py` JSON):
+
+| Cần dùng | Nguồn |
+|----------|-------|
+| `TO_EMAIL` (Reply-To, fallback From) | `messages[0].reply_to` hoặc `messages[0].from` (extract address) |
+| `CC_LIST` (gộp original.to + cc, loại self và to) | `messages[0].to + messages[0].cc`, lowercase, dedup |
+| `ORIGINAL_SUBJECT` | `messages[0].subject` (script tự thêm "Re: " prefix) |
+| `LATEST_MSG_ID` (cho In-Reply-To) | `messages[-1].message_id` |
+| `ORIGINAL_REFS` (cho References chain) | `messages[-1].references` |
+| `THREAD_ID` (cho dedup + verify) | từ `imap_search_threads.py` output, hoặc `THREAD_DATA.thread_id` |
 
 ## Cleanup tmp
 

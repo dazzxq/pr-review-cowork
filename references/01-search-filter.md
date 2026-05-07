@@ -24,24 +24,44 @@ Nếu preflight fail → run dừng ngay với message rõ. Không tiếp tục 
 
 ## Search threads
 
-Dùng Gmail connector `search_threads`:
+Dùng `imap_search_threads.py` (qua IMAP):
 
-```
-query: (subject:"DUYỆT - GenK" OR subject:"ĐĂNG - GenK") newer_than:2d
+```bash
+THREADS_JSON=$(python3 <SKILL_DIR>/scripts/imap_search_threads.py \
+    --query 'subject:"DUYỆT - GenK" OR subject:"ĐĂNG - GenK"' \
+    --newer-than 2d)
+EC=$?
+if [ $EC -ne 0 ]; then
+    log "[fatal] search_threads fail (exit $EC)"
+    exit 1
+fi
 ```
 
-Trả về list threads có hoạt động trong 48h. Đếm `MAILS_FOUND = len(threads)`.
+Output là JSON array, mỗi entry có `thread_id` (hex), `latest_subject`, `latest_sender`, `latest_date`, `match_count`. Sorted by latest_date desc.
+
+```bash
+MAILS_FOUND=$(echo "$THREADS_JSON" | python3 -c 'import json, sys; print(len(json.load(sys.stdin)))')
+```
 
 ## Lấy mail GỐC của thread
 
-Với mỗi thread:
+Với mỗi thread (loop qua `THREADS_JSON`):
 
-```
-messages = get_thread(thread_id).messages
-original = messages[0]   # mail đầu tiên (chronological)
+```bash
+THREAD_ID=$(...)  # thread_id từ search result
+THREAD_DATA=$(python3 <SKILL_DIR>/scripts/imap_get_thread.py --thread-id "$THREAD_ID")
+EC=$?
+if [ $EC -ne 0 ]; then
+    case $EC in
+      5) log "[error] thread $THREAD_ID: empty (rare)"; ERRORS=$((ERRORS+1)); continue ;;
+      *) log "[error] thread $THREAD_ID: get_thread exit $EC"; ERRORS=$((ERRORS+1)); continue ;;
+    esac
+fi
 ```
 
-Gmail API trả messages theo thứ tự thời gian, message[0] là mail gốc (DUYỆT/ĐĂNG request đầu tiên). **Tuyệt đối không dùng reply** — body reply không có cấu trúc field DUYỆT.
+Output JSON: `{thread_id, messages: [{gmail_msg_id, message_id, from, to, cc, reply_to, subject, in_reply_to, references, date}, ...]}`. Messages **sorted by date asc** — `messages[0]` là mail gốc.
+
+**Tuyệt đối không dùng reply** — body reply không có cấu trúc field DUYỆT.
 
 ## Filter 1 — Skip nếu senior reviewer đã reply
 
@@ -73,16 +93,23 @@ Lý do: đây là sếp duyệt thủ công. Tạo draft auto sẽ trùng/sai.
 
 ## Filter 2 — Idempotency qua Gmail Drafts
 
-Trước khi xử lý, check thread đã có draft do agent tạo chưa:
+Trước khi xử lý, check thread đã có draft chưa:
 
-```
-drafts = search_drafts(query=f"thread:{thread_id}")
-# Nếu drafts không rỗng → đã từng xử lý → skip
+```bash
+DRAFT_CHECK=$(python3 <SKILL_DIR>/scripts/imap_check_thread_drafted.py --thread-id "$THREAD_ID")
+HAS_DRAFT=$(echo "$DRAFT_CHECK" | python3 -c 'import json, sys; print(json.load(sys.stdin)["has_draft"])')
+if [ "$HAS_DRAFT" = "True" ]; then
+    log "[skip-existing] thread $THREAD_ID: draft đã tồn tại"
+    SKIPPED_EXISTING=$((SKIPPED_EXISTING+1))
+    continue
+fi
 ```
 
-→ **SKIP nếu có draft**. Log: `[skip-existing] thread <id>: draft đã tồn tại`. Tăng counter `SKIPPED_EXISTING`.
+→ **SKIP nếu có draft**. Tăng counter `SKIPPED_EXISTING`.
 
 Đây là cơ chế thay cho local DB: Gmail chính nó là single source of truth. Không cần SQLite.
+
+**Plus dedup ở script layer**: `imap_create_draft.py` tự pre-check `X-Cowork-Dedup-Key` header trước APPEND — race-safe nếu 2 runs concurrent với cùng body.
 
 ## Phân loại mail_type
 
@@ -95,18 +122,18 @@ Từ `original.subject` (case-insensitive):
 ## Decision tree tóm tắt
 
 ```
-REVIEWERS ← json.parse(run("python3 <SKILL_DIR>/scripts/list_reviewers.py"))
-threads ← search_threads(query)
+preflight: fetch_email_body.py --check-creds → fail → exit 1
+REVIEWERS ← list_reviewers.py
+threads ← imap_search_threads.py
 for thread in threads:
-    messages ← get_thread(thread.id).messages
-    if any(any(r in m.from.lower() for r in REVIEWERS) for m in messages):
+    thread_data ← imap_get_thread.py --thread-id <thread.thread_id>
+    if any(any(r in m.from.lower() for r in REVIEWERS) for m in thread_data.messages):
         SKIPPED_REVIEWER += 1; log; continue
 
-    drafts ← search_drafts(f"thread:{thread.id}")
-    if drafts:
+    if imap_check_thread_drafted.py --thread-id <thread.thread_id>.has_draft:
         SKIPPED_EXISTING += 1; log; continue
 
-    original ← messages[0]
+    original ← thread_data.messages[0]
     if 'DUYỆT - GenK' in original.subject.upper():
         → 02-duyet-pipeline.md
     elif 'ĐĂNG - GenK' in original.subject.upper():
