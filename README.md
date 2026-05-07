@@ -554,12 +554,14 @@ pr-review-cowork/
 │   ├── 03-dang-placeholder.md     ← ĐĂNG (chưa triển khai)
 │   ├── 04-reply-templates.md      ← Template PASS/FAIL + reply-all addressing
 │   ├── 06-send-mode.md            ← Setup SEND_MODE + edge cases
-│   └── 07-test-send.md            ← Self-test SMTP + rotate reminder
+│   ├── 07-test-send.md            ← Self-test SMTP + rotate reminder
+│   └── 08-cowork-network.md       ← Test Cowork egress + cách config allowlist
 │
 ├── scripts/
 │   ├── fetch_document.py          ← Tải Bizfly Drive (curl direct, no browser)
 │   ├── send_email.py              ← SMTP send (production, SEND_MODE=true)
-│   └── test_send.py               ← Self-test SMTP + rotate reminder
+│   ├── test_send.py               ← Self-test SMTP + rotate reminder
+│   └── test_cowork_network.py     ← TCP probe Bizfly/SMTP/Internet (no creds)
 │
 └── .venv/                         ← Tạo bởi setup.sh (gitignored)
 ```
