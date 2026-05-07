@@ -329,9 +329,24 @@ SMTP_PORT=465
 
 ## Test SMTP trước khi gửi production
 
-⚠️ **Bắt buộc** test ít nhất 1 lần sau khi điền credentials, trước khi để agent gửi mail thật cho BBT.
+⚠️ **Bắt buộc** test 2 bước trước khi để agent gửi mail thật cho BBT.
 
-Test self-send (gửi cho chính bạn, không động tới BBT/khách):
+### Bước 1: Test network egress (chạy TRONG Cowork)
+
+Cowork mặc định chặn outbound network. Verify trước rằng VM của Cowork có thể reach Bizfly + SMTP host.
+
+```
+Trong Cowork conversation gõ:
+  "test the cowork network reachability"
+```
+
+→ Cowork agent chạy `scripts/test_cowork_network.py` trong VM của nó. Nếu fail: Settings → Network egress → "All domains" mode (vì additional-domains list có known bugs trong Cowork hiện tại — xem `references/08-cowork-network.md`).
+
+KHÔNG nên chỉ chạy local terminal — vì local network ≠ Cowork sandbox network.
+
+### Bước 2: Test SMTP credentials (self-send)
+
+Sau khi network OK, test self-send (gửi cho chính bạn, không động tới BBT/khách):
 
 ```bash
 # Mode 1 — đọc từ .env (recommend cho Cowork)

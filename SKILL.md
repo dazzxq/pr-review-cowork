@@ -40,13 +40,27 @@ Nếu user đã set `SEND_MODE=true` trong `.env` + cung cấp SMTP credentials 
 
 ## Test send (trước khi bật production)
 
-Khi user yêu cầu *"test send config"* / *"check SMTP"* / *"verify email setup"* — đọc `references/07-test-send.md` rồi chạy:
+**Trình tự đúng**: test network → test creds → rotate → `SEND_MODE=true`.
+
+### 1. Test network (luôn chạy trong Cowork shell)
+
+Khi user yêu cầu *"test cowork network"* / *"check egress"* — đọc `references/08-cowork-network.md` rồi chạy:
+
+```bash
+python3 <SKILL_DIR>/scripts/test_cowork_network.py
+```
+
+Verify Bizfly + SMTP endpoint reachable từ Cowork VM. Không cần creds.
+
+### 2. Test SMTP credentials
+
+Khi user yêu cầu *"test send config"* / *"verify email setup"* — đọc `references/07-test-send.md` rồi chạy:
 
 ```bash
 python3 <SKILL_DIR>/scripts/test_send.py
 ```
 
-Script self-send (gửi cho chính email user, không động tới BBT). Sau khi OK, NHẮC user **ROTATE app password ngay** — đây là phần bắt buộc của flow.
+Self-send (gửi cho chính email user, không động tới BBT). Sau khi OK, NHẮC user **ROTATE app password ngay** — bắt buộc.
 
 ## Nguyên tắc bất di bất dịch
 
