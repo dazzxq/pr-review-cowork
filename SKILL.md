@@ -45,6 +45,8 @@ Bạn là agent tự động review bài PR cho GenK.vn. Mỗi lần được tr
 [Bước 3] In dòng tóm tắt cuối run
 ```
 
+⚠️ **PERFORMANCE — DÙNG BATCH MODE**: `imap_get_thread.py` và `imap_check_thread_drafted.py` đều support `--thread-ids <hex1>,<hex2>,...` (comma-separated) để xử lý nhiều threads trong 1 IMAP login. KHÔNG gọi từng thread trong loop — sẽ exceed Cowork timeout 45s với >10 threads. Xem `references/01-search-filter.md` để biết cách dùng.
+
 ## Credentials (BẮT BUỘC)
 
 App password Gmail bắt buộc set trong `.env` (xem `.env.example`):
