@@ -276,12 +276,15 @@ chmod +x setup.sh
 .\setup.ps1
 ```
 
-Nếu PowerShell báo *"running scripts is disabled on this system"*, chạy 1 lệnh tạm bypass cho session hiện tại rồi thử lại:
+Nếu PowerShell báo *"running scripts is disabled on this system"*, dán 1 dòng này (gồm cả 2 lệnh, ngăn cách bằng `;`):
 
 ```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\setup.ps1
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; .\setup.ps1
 ```
+
+`-Scope Process` = chỉ áp dụng cho session PowerShell hiện tại (đóng cửa sổ là về như cũ, không cần admin). `-Force` để PowerShell không hỏi confirm.
+
+> ⚠️ Nếu bạn copy 2 dòng tách biệt (`Set-ExecutionPolicy ...` rồi `.\setup.ps1`) thì PHẢI nhấn **Enter** sau dòng 1 và đợi prompt mới xuất hiện, không paste 2 dòng cùng lúc — PowerShell sẽ hiểu `.\setup.ps1` là argument của `Set-ExecutionPolicy` và báo lỗi `PositionalParameterNotFound`.
 
 > ⚠️ **Đừng dùng `chmod` hay `./setup.sh` trên PowerShell/CMD** — đó là Unix command, Windows native shell không hiểu. Dùng `setup.ps1` thay thế. (Trừ khi bạn đang trong **Git Bash** — khi đó `setup.sh` chạy được như Mac.)
 
