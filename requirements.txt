@@ -1,5 +1,8 @@
 # Python deps cho Cowork-Lite PR Review
 # Cài đặt: pip install -r requirements.txt
-# Hoặc chạy ./setup.sh để tự động tạo venv + install
+# Hoặc chạy ./setup.sh (macOS/Linux) / .\setup.ps1 (Windows) để tự động tạo venv + install
 
-markitdown[all]>=0.1.0
+# Use case duy nhất: convert .docx (Bizfly Drive) → markdown.
+# Dùng extra [docx] thay vì [all] để tránh pull pdf/excel/pydub/audio/azure
+# — pydub đặc biệt fail trên Python 3.13+ (audioop module bị remove).
+markitdown[docx]>=0.1.0
