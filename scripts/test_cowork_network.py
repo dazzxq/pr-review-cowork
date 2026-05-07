@@ -14,6 +14,7 @@ Cách chạy từ Cowork:
 
 Endpoints kiểm tra:
   - drive.bfcplatform.vn:443  (Bizfly Drive download — LUÔN cần)
+  - imap.gmail.com:993        (IMAP fetch HTML body — LUÔN cần, workaround connector)
   - smtp.gmail.com:465        (SMTP send — chỉ cần khi SEND_MODE=true)
   - www.google.com:443        (control test, có internet hay không)
 
@@ -26,6 +27,7 @@ import time
 
 ENDPOINTS = [
     ('bizflycloud.vn',       443, 'Bizfly infra (Bizfly Drive tenant subdomain dùng cùng network)'),
+    ('imap.gmail.com',       993, 'IMAP fetch HTML body (workaround Anthropic Gmail connector)'),
     ('smtp.gmail.com',       465, 'SMTP send (chỉ cần khi SEND_MODE=true)'),
     ('www.google.com',       443, 'Internet control (có kết nối ra ngoài không)'),
 ]

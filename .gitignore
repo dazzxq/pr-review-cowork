@@ -11,3 +11,6 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# Planning artifacts (codex review, design notes) — không cần distribute
+.planning/

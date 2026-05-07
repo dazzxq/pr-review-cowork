@@ -2,7 +2,7 @@
 """
 Test SMTP send config — gửi 1 email test CHO CHÍNH BẠN (self-send), an toàn.
 
-Mục đích: verify SENDER_EMAIL + SENDER_APP_PASSWORD + network egress trước khi
+Mục đích: verify GMAIL_EMAIL + GMAIL_APP_PASSWORD + network egress trước khi
 bật SEND_MODE=true cho production. KHÔNG gửi tới BBT/khách thật.
 
 Usage:
@@ -76,8 +76,11 @@ def main():
     # ── 1. Lấy credentials ────────────────────────────────────────────────
     section('Bước 1: Đọc credentials')
 
-    email = args.email or os.environ.get('SENDER_EMAIL', '').strip() or None
-    pwd = args.password or os.environ.get('SENDER_APP_PASSWORD', '').strip() or None
+    # Backward-compat: ưu tiên GMAIL_*, fallback SENDER_* (legacy)
+    env_email = (os.environ.get('GMAIL_EMAIL') or os.environ.get('SENDER_EMAIL', '')).strip()
+    env_pwd = (os.environ.get('GMAIL_APP_PASSWORD') or os.environ.get('SENDER_APP_PASSWORD', '')).strip()
+    email = args.email or env_email or None
+    pwd = args.password or env_pwd or None
 
     source_email = 'CLI arg' if args.email else ('.env' if email else None)
     source_pwd = 'CLI arg' if args.password else ('.env' if pwd else None)
@@ -88,18 +91,18 @@ def main():
                 email = input('Email Gmail/Workspace: ').strip()
                 source_email = 'interactive prompt'
             except EOFError:
-                fail('Không có terminal interactive. Set SENDER_EMAIL trong .env hoặc dùng --email.')
+                fail('Không có terminal interactive. Set GMAIL_EMAIL trong .env hoặc dùng --email.')
         if not pwd:
             try:
                 pwd = getpass.getpass('App password (hidden — paste rồi Enter): ').strip()
                 source_pwd = 'interactive prompt'
             except EOFError:
-                fail('Không có terminal interactive. Set SENDER_APP_PASSWORD trong .env hoặc dùng --interactive ở real terminal.')
+                fail('Không có terminal interactive. Set GMAIL_APP_PASSWORD trong .env hoặc dùng --interactive ở real terminal.')
 
     if not email:
-        fail('Thiếu email — set SENDER_EMAIL trong .env hoặc dùng --email.', 1)
+        fail('Thiếu email — set GMAIL_EMAIL trong .env hoặc dùng --email.', 1)
     if not pwd:
-        fail('Thiếu app password — set SENDER_APP_PASSWORD trong .env hoặc dùng --password/--interactive.', 1)
+        fail('Thiếu app password — set GMAIL_APP_PASSWORD trong .env hoặc dùng --password/--interactive.', 1)
 
     # Strip spaces (Google copy có dấu cách)
     pwd_clean = pwd.replace(' ', '')
@@ -219,7 +222,7 @@ Bạn vừa test với app password ở plaintext. Để tránh password lộ v�
   2. Tìm password vừa dùng (theo tên/timestamp), click {color('REVOKE', C_RED)}
   3. Tạo password mới
   4. Update {color('.env', C_BLUE)} với password mới:
-       SENDER_APP_PASSWORD=<new-password-here>
+       GMAIL_APP_PASSWORD=<new-password-here>
   5. Set {color('SEND_MODE=true', C_BLUE)} trong .env nếu muốn bật production
 
 Verify email đã đến inbox của {email} trước khi rotate.

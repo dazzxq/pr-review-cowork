@@ -78,12 +78,13 @@ def main():
     # ── 1. Validate config ─────────────────────────────────────────────────
     if not truthy(os.environ.get('SEND_MODE')):
         fail(10, "SEND_MODE chưa bật. Set SEND_MODE=true trong .env nếu muốn gửi mail thẳng.")
-    sender = os.environ.get('SENDER_EMAIL', '').strip()
+    # Backward-compat: ưu tiên GMAIL_*, fallback SENDER_* (legacy)
+    sender = (os.environ.get('GMAIL_EMAIL') or os.environ.get('SENDER_EMAIL', '')).strip()
     if not sender:
-        fail(11, "SENDER_EMAIL trống trong .env. Điền email Gmail/Workspace của bạn.")
-    pwd = os.environ.get('SENDER_APP_PASSWORD', '').strip()
+        fail(11, "GMAIL_EMAIL (hoặc SENDER_EMAIL) trống trong .env. Điền email Gmail/Workspace của bạn.")
+    pwd = (os.environ.get('GMAIL_APP_PASSWORD') or os.environ.get('SENDER_APP_PASSWORD', '')).strip()
     if not pwd:
-        fail(12, "SENDER_APP_PASSWORD trống trong .env. "
+        fail(12, "GMAIL_APP_PASSWORD (hoặc SENDER_APP_PASSWORD) trống trong .env. "
                  "Tạo app password tại https://myaccount.google.com/apppasswords "
                  "(yêu cầu 2FA đã bật).")
     # Strip space trong app password (Google hiển thị có dấu cách)
