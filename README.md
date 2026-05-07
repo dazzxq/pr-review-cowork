@@ -275,21 +275,42 @@ Script sẽ:
 - Tạo `.env` từ `.env.example` (nếu chưa có)
 - In hướng dẫn các bước tiếp theo
 
-### Bước 3: Setup Cowork
+### Bước 3: Cowork Connectors + Network Egress
 
-1. Mở **Claude Desktop** → tab **Cowork**
-2. **Settings → Connectors → Connect Gmail** → click "Allow" trong popup OAuth
-3. **Trust folder**: chọn `~/pr-review-cowork/` (Cowork hỏi 1 lần khi tạo task)
+**3.1. Connect Gmail** (OAuth)
+- Mở **Claude Desktop** → **Settings** → **Connectors**
+- Click **Connect Gmail** → "Allow" trong popup OAuth
 
-### Bước 4: Tạo scheduled task
+**3.2. Bật network egress cho bash sandbox** ⚠️ QUAN TRỌNG
+- **Settings → Capabilities → Code execution → Allow network egress**
+- Chọn mode **"All domains"** (recommended — additional-domains list có known bugs)
+- Hoặc add specific: `bizflycloud.vn`, `*.bfcplatform.vn`, `smtp.gmail.com`
+
+⚠️ **Mặc định bash sandbox AIR-GAPPED** — không có network interface, chỉ loopback. Bỏ qua bước này → tất cả script (`fetch_document.py`, `send_email.py`, `test_*.py`) sẽ fail vì không reach được Bizfly/Gmail. Xem `references/08-cowork-network.md` để biết chi tiết.
+
+**3.3. Verify network reach** (sau khi đổi setting, chạy test)
+- Mở 1 Cowork session bất kỳ, **trust folder `~/pr-review-cowork/`** trong session đó
+- Gõ:
+  ```
+  Run python3 ~/pr-review-cowork/scripts/test_cowork_network.py and show full output.
+  ```
+- Expected: 3/3 endpoint ✓ OK (`bizflycloud.vn:443`, `smtp.gmail.com:465`, `www.google.com:443`)
+- Nếu fail → quay lại 3.2 đổi mode hoặc liên hệ workspace admin
+
+### Bước 4: Tạo scheduled task — KHÔNG QUÊN folder
 
 Trong any Cowork session, gõ:
 
 ```
-Schedule a task every 10 minutes that runs the skill at ~/pr-review-cowork/SKILL.md
+Create a scheduled task that runs every 10 minutes:
+- Working folder: ~/pr-review-cowork/
+- Skill: SKILL.md in that folder
+- Description: PR Review Agent for GenK
 ```
 
-Cowork sẽ tạo task trong **Routines** tab với cron `*/10 * * * *`.
+⚠️ **Phải chỉ định working folder** rõ ràng. Nếu không, Cowork sẽ tạo task không có context folder → khi fire, agent không thấy SKILL.md/scripts → improvise generic action.
+
+Verify: vào **Routines** tab → click task → check field "Working folder" có set đúng đường dẫn không.
 
 ### Bước 5: Run lần đầu + approve permissions
 
@@ -299,6 +320,11 @@ Cowork sẽ tạo task trong **Routines** tab với cron `*/10 * * * *`.
    - Gmail search/read/draft
    - File read/write
 3. Click **"Always allow"** cho từng tool → các run sau auto-approve
+4. Đọc output run đầu — verify Cowork đã đọc đúng SKILL.md (không phải improvise generic). Output cuối phải có dòng:
+   ```
+   Run: found=X, drafted=Y, ...
+   ```
+   Nếu không thấy dòng này → task đang chạy generic action, không phải SKILL.md → quay lại Bước 4 check folder.
 
 ✅ **Done.** Cứ mỗi 10 phút (khi máy mở + Claude Desktop running), task sẽ tự chạy.
 
@@ -335,12 +361,20 @@ SMTP_PORT=465
 
 Cowork mặc định chặn outbound network. Verify trước rằng VM của Cowork có thể reach Bizfly + SMTP host.
 
+Trong Cowork conversation (folder `~/pr-review-cowork/` đã được trust trong session đó), gõ **prompt cụ thể**:
+
 ```
-Trong Cowork conversation gõ:
-  "test the cowork network reachability"
+Run python3 ~/pr-review-cowork/scripts/test_cowork_network.py and show full output.
 ```
 
-→ Cowork agent chạy `scripts/test_cowork_network.py` trong VM của nó. Nếu fail: Settings → Network egress → "All domains" mode (vì additional-domains list có known bugs trong Cowork hiện tại — xem `references/08-cowork-network.md`).
+⚠️ **Tránh prompt vague** như `"test the cowork network reachability"` — Cowork sẽ improvise với generic domains thay vì chạy đúng script. Phải invoke script trực tiếp bằng path.
+
+Expected output: 3/3 endpoint ✓ OK với latency:
+- `bizflycloud.vn:443` ✓ OK (~1000ms ổn)
+- `smtp.gmail.com:465` ✓ OK (~50ms)
+- `www.google.com:443` ✓ OK (~100ms)
+
+Nếu fail → Settings → Capabilities → Code execution → Allow network egress → "All domains" (xem `references/08-cowork-network.md`).
 
 KHÔNG nên chỉ chạy local terminal — vì local network ≠ Cowork sandbox network.
 
@@ -359,10 +393,12 @@ python3 scripts/test_send.py --interactive
 python3 scripts/test_send.py --dry-run
 ```
 
-Hoặc trong Cowork conversation:
+Hoặc trong Cowork conversation (folder đã trust):
 ```
-Test the SMTP send config
+Run python3 ~/pr-review-cowork/scripts/test_send.py and show full output. Do not echo any credentials in your response — the script reads from .env.
 ```
+
+Câu cuối quan trọng: ngăn Cowork lỡ paste password vào conversation log.
 
 ### Sample output (success)
 
@@ -643,11 +679,37 @@ SMTP via stdlib `smtplib`. App password từ `.env`. Strict validation, exit cod
 
 ## Troubleshooting
 
+### "Cowork agent improvise generic test, không chạy script của tôi"
+
+**Triệu chứng**: gõ `"test the cowork network reachability"` → Cowork không chạy `test_cowork_network.py` mà tự bịa ra test với generic domains (google, github, npm...).
+
+**Nguyên nhân**: folder `~/pr-review-cowork/` chưa được trust trong **task/session đó** → Cowork không thấy SKILL.md/scripts → improvise.
+
+**Fix**:
+1. Vào Routines tab → click task → check field "Working folder"
+2. Nếu trống/sai → Edit task, set folder = `~/pr-review-cowork/`, save
+3. Hoặc trong session hiện tại: gõ `"trust folder ~/pr-review-cowork"`
+4. Re-prompt với invocation cụ thể:
+   ```
+   Run python3 ~/pr-review-cowork/scripts/test_cowork_network.py
+   ```
+
+### "Bash sandbox is fully network-isolated" / "DNS unreachable"
+
+**Triệu chứng**: bất kỳ script Python/curl nào trong Cowork shell đều fail với DNS lookup error hoặc timeout.
+
+**Nguyên nhân**: Cowork mặc định air-gap bash (chỉ loopback, không routes).
+
+**Fix**: Settings → Capabilities → **Code execution → Allow network egress** → đổi mode sang **"All domains"**. Restart Cowork session, re-test.
+
+Chi tiết + edge cases: `references/08-cowork-network.md`.
+
 ### "Task không chạy"
 
 1. Check Routines tab → task status có "Active" không
 2. Check máy đang awake + Claude Desktop đang running
 3. Click "Run now" → xem có lỗi permission nào pending không
+4. Check working folder trong task config có đúng `~/pr-review-cowork/` không (xem case "improvise" ở trên)
 
 ### "Gmail connector không tìm thấy"
 
