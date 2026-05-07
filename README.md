@@ -263,13 +263,31 @@ cd ~/pr-review-cowork
 
 ### Bước 2: Chạy setup script
 
+#### macOS / Linux (bash)
+
 ```bash
 chmod +x setup.sh
 ./setup.sh
 ```
 
-Script sẽ:
-- Check Python 3.10+
+#### Windows (PowerShell)
+
+```powershell
+.\setup.ps1
+```
+
+Nếu PowerShell báo *"running scripts is disabled on this system"*, chạy 1 lệnh tạm bypass cho session hiện tại rồi thử lại:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\setup.ps1
+```
+
+> ⚠️ **Đừng dùng `chmod` hay `./setup.sh` trên PowerShell/CMD** — đó là Unix command, Windows native shell không hiểu. Dùng `setup.ps1` thay thế. (Trừ khi bạn đang trong **Git Bash** — khi đó `setup.sh` chạy được như Mac.)
+
+Cả 2 script đều idempotent — chạy lại an toàn — và làm cùng việc:
+
+- Check Python 3.10+ (Windows tự ưu tiên `py -3.13/3.12/3.11/3.10`)
 - Tạo `.venv/` Python virtual environment
 - Install `markitdown[all]` (chỉ dependency duy nhất)
 - Tạo `.env` từ `.env.example` (nếu chưa có)
@@ -585,7 +603,8 @@ pr-review-cowork/
 ├── .env.example                   ← Template config
 ├── .env                           ← Config thật (gitignored, tạo bởi setup.sh)
 ├── .gitignore                     ← Exclude .env, .venv
-├── setup.sh                       ← One-shot setup (venv + deps + .env)
+├── setup.sh                       ← One-shot setup macOS/Linux (venv + deps + .env)
+├── setup.ps1                      ← One-shot setup Windows PowerShell (cùng logic)
 ├── requirements.txt               ← markitdown[all]
 │
 ├── references/                    ← Tài liệu chi tiết, load on-demand
